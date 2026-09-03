@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.UIManager;
 import io.github.dennisochulor.flashcards.study.progress.ProgressManager;
 import io.github.dennisochulor.flashcards.study.repository.StudyQuestionRepository;
+ import io.github.dennisochulor.flashcards.study.question.AnswerValidator;
 
 public class Flashcards implements ClientModInitializer {
 
@@ -47,6 +48,7 @@ public class Flashcards implements ClientModInitializer {
             FileManager.init();
             ProgressManager.init();
             StudyQuestionRepository.init();
+            AnswerValidator.runSelfTest();
             QuestionScheduler.reload();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> QuestionScheduler.close());
