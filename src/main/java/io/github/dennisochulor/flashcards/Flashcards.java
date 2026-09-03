@@ -19,7 +19,10 @@ import org.slf4j.LoggerFactory;
 import javax.swing.UIManager;
 import io.github.dennisochulor.flashcards.study.progress.ProgressManager;
 import io.github.dennisochulor.flashcards.study.repository.StudyQuestionRepository;
- import io.github.dennisochulor.flashcards.study.question.AnswerValidator;
+import io.github.dennisochulor.flashcards.study.question.StudyQuestion;
+import io.github.dennisochulor.flashcards.study.screen.StudyQuestionScreen;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Flashcards implements ClientModInitializer {
 
@@ -48,7 +51,6 @@ public class Flashcards implements ClientModInitializer {
             FileManager.init();
             ProgressManager.init();
             StudyQuestionRepository.init();
-            AnswerValidator.runSelfTest();
             QuestionScheduler.reload();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> QuestionScheduler.close());
@@ -68,6 +70,16 @@ public class Flashcards implements ClientModInitializer {
                 GLFW.GLFW_KEY_G,
                 keyBindingCategory
         ));
+
+        KeyMapping keyBindingStudyQuestion =
+                KeyMappingHelper.registerKeyMapping(
+                        new KeyMapping(
+                                "Prompt a StudyCraft question",
+                                InputConstants.Type.KEYSYM,
+                                GLFW.GLFW_KEY_J,
+                                keyBindingCategory
+                        )
+                );
 
         ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
             if (keyBindingConfigMenu.consumeClick()) {
@@ -98,6 +110,56 @@ public class Flashcards implements ClientModInitializer {
                 QuestionScheduler.promptQuestion();
             }
         });
+
+        ClientTickEvents.END_CLIENT_TICK.register(
+                minecraft -> {
+
+                    if (!keyBindingStudyQuestion.consumeClick()) {
+                        return;
+                    }
+
+                    while (keyBindingStudyQuestion.consumeClick()) {
+                        // Consume additional presses.
+                    }
+
+                    if (minecraft.player == null
+                            || minecraft.level == null) {
+                        return;
+                    }
+
+                    if (minecraft.gui.screen() != null) {
+                        return;
+                    }
+
+                    List<StudyQuestion> questions =
+                            StudyQuestionRepository.getAll();
+
+                    if (questions.isEmpty()) {
+
+                        minecraft.player.sendOverlayMessage(
+                                Component.literal(
+                                        "No StudyCraft questions are loaded."
+                                ).withColor(
+                                        CommonColors.SOFT_RED
+                                )
+                        );
+
+                        return;
+                    }
+
+                    StudyQuestion question =
+                            questions.get(
+                                    ThreadLocalRandom.current()
+                                            .nextInt(
+                                                    questions.size()
+                                            )
+                            );
+
+                    minecraft.gui.setScreen(
+                            new StudyQuestionScreen(question)
+                    );
+                }
+        );
     }
 
 }

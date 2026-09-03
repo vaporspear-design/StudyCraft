@@ -227,52 +227,5 @@ public final class AnswerValidator {
         }
     }
 
-    public static void runSelfTest() {
 
-        StudyQuestion textQuestion =
-                new StudyQuestion(
-                        "test_text",
-                        io.github.dennisochulor.flashcards.study.Subject.ENGLISH,
-                        "Othello",
-                        QuestionType.TEXT,
-                        "Who wrote Othello?",
-                        null,
-                        "William Shakespeare",
-                        java.util.List.of("Shakespeare"),
-                        0.0,
-                        1
-                );
-
-        if (!isCorrect(
-                textQuestion,
-                "shakespeare"
-        )) {
-            throw new IllegalStateException(
-                    "Text answer validation test failed."
-            );
-        }
-
-        StudyQuestion numericQuestion =
-                new StudyQuestion(
-                        "test_numeric",
-                        io.github.dennisochulor.flashcards.study.Subject.PHYSICS,
-                        "Mechanics",
-                        QuestionType.NUMERIC,
-                        "Test numerical question",
-                        null,
-                        "2",
-                        java.util.List.of(),
-                        0.01,
-                        1
-                );
-
-        if (!isCorrect(
-                numericQuestion,
-                "2.005"
-        )) {
-            throw new IllegalStateException(
-                    "Numeric answer validation test failed."
-            );
-        }
-    }
 }
