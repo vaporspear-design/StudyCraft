@@ -100,7 +100,7 @@ public final class StudyQuestionRepository {
          */
         List<StudyQuestion> bridgedQuestions =
                 LegacyAnkiQuestionBridge
-                        .loadIrishVocabularyQuestions();
+                        .loadQuestions();
 
         for (StudyQuestion question :
                 bridgedQuestions) {

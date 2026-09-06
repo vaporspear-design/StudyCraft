@@ -15,91 +15,196 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 public final class LegacyAnkiQuestionBridge {
 
     private LegacyAnkiQuestionBridge() {
     }
 
-    public static List<StudyQuestion>
-    loadIrishVocabularyQuestions() {
+    public static List<StudyQuestion> loadQuestions() {
 
-        Map<String, List<Question>> legacyCategories =
+        Map<String, List<Question>> categories =
                 FileManager.getQuestions();
 
         List<StudyQuestion> result =
                 new ArrayList<>();
 
-        for (
-                Map.Entry<String, List<Question>> entry
-                : legacyCategories.entrySet()
-        ) {
+        for (Map.Entry<String, List<Question>> entry
+                : categories.entrySet()) {
 
             String category =
                     entry.getKey();
 
-            if (!isIrishAnkiCategory(category)) {
+            Optional<CategoryInfo> categoryInfo =
+                    parseCategory(category);
+
+            if (categoryInfo.isEmpty()) {
                 continue;
             }
 
-            for (Question legacyQuestion :
-                    entry.getValue()) {
+            CategoryInfo info =
+                    categoryInfo.get();
+
+            for (Question legacyQuestion
+                    : entry.getValue()) {
 
                 result.add(
-                        convertIrishVocabularyQuestion(
-                                legacyQuestion
+                        convertQuestion(
+                                legacyQuestion,
+                                info
                         )
                 );
             }
         }
 
         Flashcards.LOGGER.info(
-                "Bridged {} Irish Anki vocabulary questions into StudyCraft.",
+                "Bridged {} Anki questions into StudyCraft.",
                 result.size()
         );
 
         return List.copyOf(result);
     }
 
-    private static boolean isIrishAnkiCategory(
+    private static Optional<CategoryInfo> parseCategory(
             String category
     ) {
 
-        String normalized =
-                category
-                        .toLowerCase(Locale.ROOT)
-                        .replace('_', ' ')
-                        .replace('-', ' ');
+        String lower =
+                category.toLowerCase(Locale.ROOT);
 
-        boolean isAnki =
-                normalized.contains("anki");
+        if (!lower.startsWith("anki")) {
+            return Optional.empty();
+        }
 
-        boolean isIrish =
-                normalized.contains("irish")
-                        || normalized.contains(
-                        "gaeilge"
+        String remainder =
+                category.substring(4)
+                        .replaceFirst(
+                                "^[-_ ]+",
+                                ""
+                        );
+
+        if (remainder.isBlank()) {
+            return Optional.empty();
+        }
+
+        String[] parts =
+                remainder.split(
+                        "[-_]",
+                        2
                 );
 
-        return isAnki && isIrish;
+        String subjectToken =
+                normalizeToken(
+                        parts[0]
+                );
+
+        Optional<Subject> subject =
+                subjectFromToken(
+                        subjectToken
+                );
+
+        if (subject.isEmpty()) {
+
+            Flashcards.LOGGER.warn(
+                    "Could not determine StudyCraft subject from Anki category '{}'.",
+                    category
+            );
+
+            return Optional.empty();
+        }
+
+        String topic =
+                parts.length >= 2
+                        ? makeDisplayTopic(parts[1])
+                        : "General";
+
+        return Optional.of(
+                new CategoryInfo(
+                        subject.get(),
+                        topic
+                )
+        );
     }
 
-    private static StudyQuestion
-    convertIrishVocabularyQuestion(
-            Question legacyQuestion
+    private static Optional<Subject> subjectFromToken(
+            String token
     ) {
 
+        return switch (token) {
+
+            case "english" ->
+                    Optional.of(
+                            Subject.ENGLISH
+                    );
+
+            case "irish",
+                 "gaeilge" ->
+                    Optional.of(
+                            Subject.IRISH
+                    );
+
+            case "maths",
+                 "math",
+                 "mathematics" ->
+                    Optional.of(
+                            Subject.MATHS
+                    );
+
+            case "music" ->
+                    Optional.of(
+                            Subject.MUSIC
+                    );
+
+            case "art",
+                 "arthistory" ->
+                    Optional.of(
+                            Subject.ART_HISTORY
+                    );
+
+            case "physics" ->
+                    Optional.of(
+                            Subject.PHYSICS
+                    );
+
+            case "appliedmaths",
+                 "appliedmath",
+                 "appliedmathematics" ->
+                    Optional.of(
+                            Subject.APPLIED_MATHS
+                    );
+
+            default ->
+                    Optional.empty();
+        };
+    }
+
+    private static StudyQuestion convertQuestion(
+            Question legacyQuestion,
+            CategoryInfo info
+    ) {
+
+        String idSource =
+                info.subject().id()
+                        + "\u0000"
+                        + info.topic()
+                        + "\u0000"
+                        + legacyQuestion.question()
+                        + "\u0000"
+                        + legacyQuestion.answer();
+
         String questionId =
-                "anki_irish_vocab_"
+                "anki_"
+                        + info.subject().id()
+                        + "_"
                         + stableHash(
-                        legacyQuestion.question()
-                                + "\u0000"
-                                + legacyQuestion.answer()
+                        idSource
                 );
 
         return new StudyQuestion(
                 questionId,
-                Subject.IRISH,
-                "Vocabulary",
+                info.subject(),
+                info.topic(),
                 QuestionType.TEXT,
                 legacyQuestion.question(),
                 legacyQuestion.imageName(),
@@ -108,6 +213,70 @@ public final class LegacyAnkiQuestionBridge {
                 0.0,
                 1
         );
+    }
+
+    private static String normalizeToken(
+            String value
+    ) {
+
+        return value
+                .toLowerCase(Locale.ROOT)
+                .replaceAll(
+                        "[^a-z]",
+                        ""
+                );
+    }
+
+    private static String makeDisplayTopic(
+            String value
+    ) {
+
+        String cleaned =
+                value
+                        .replace('_', ' ')
+                        .replace('-', ' ')
+                        .trim()
+                        .replaceAll(
+                                "\\s+",
+                                " "
+                        );
+
+        if (cleaned.isBlank()) {
+            return "General";
+        }
+
+        StringBuilder result =
+                new StringBuilder();
+
+        boolean capitalizeNext =
+                true;
+
+        for (char c :
+                cleaned.toCharArray()) {
+
+            if (Character.isWhitespace(c)) {
+
+                result.append(c);
+
+                capitalizeNext =
+                        true;
+
+            } else if (capitalizeNext) {
+
+                result.append(
+                        Character.toUpperCase(c)
+                );
+
+                capitalizeNext =
+                        false;
+
+            } else {
+
+                result.append(c);
+            }
+        }
+
+        return result.toString();
     }
 
     private static String stableHash(
@@ -121,20 +290,16 @@ public final class LegacyAnkiQuestionBridge {
                             "SHA-256"
                     );
 
-            byte[] hash =
+            byte[] bytes =
                     digest.digest(
                             value.getBytes(
                                     StandardCharsets.UTF_8
                             )
                     );
 
-            /*
-             * First 8 bytes = 16 hexadecimal characters.
-             * More than sufficient for stable question IDs.
-             */
             return HexFormat.of()
                     .formatHex(
-                            hash,
+                            bytes,
                             0,
                             8
                     );
@@ -146,5 +311,11 @@ public final class LegacyAnkiQuestionBridge {
                     e
             );
         }
+    }
+
+    private record CategoryInfo(
+            Subject subject,
+            String topic
+    ) {
     }
 }

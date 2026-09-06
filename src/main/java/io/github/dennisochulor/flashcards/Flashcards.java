@@ -1,8 +1,14 @@
 package io.github.dennisochulor.flashcards;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import io.github.dennisochulor.flashcards.config.*;
+import io.github.dennisochulor.flashcards.config.ConfigurationScreen;
 import io.github.dennisochulor.flashcards.questions.QuestionScheduler;
+import io.github.dennisochulor.flashcards.study.progress.ProgressManager;
+import io.github.dennisochulor.flashcards.study.question.StudyQuestion;
+import io.github.dennisochulor.flashcards.study.repository.StudyQuestionRepository;
+import io.github.dennisochulor.flashcards.study.scheduler.StudyAutoQuizManager;
+import io.github.dennisochulor.flashcards.study.scheduler.StudyScheduler;
+import io.github.dennisochulor.flashcards.study.screen.StudyQuestionScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -16,60 +22,162 @@ import net.minecraft.util.CommonColors;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.UIManager;
-import io.github.dennisochulor.flashcards.study.progress.ProgressManager;
-import io.github.dennisochulor.flashcards.study.repository.StudyQuestionRepository;
-import io.github.dennisochulor.flashcards.study.question.StudyQuestion;
-import io.github.dennisochulor.flashcards.study.screen.StudyQuestionScreen;
-import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class Flashcards implements ClientModInitializer {
 
     public static final String MOD_ID = "flashcards";
-    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    public static final Logger LOGGER =
+            LoggerFactory.getLogger(MOD_ID);
 
     @Override
     public void onInitializeClient() {
-        System.setProperty("java.awt.headless","false"); // needed for question image chooser to function
-        try { // still isn't truly native looking but it is the best we got...
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        }
-        catch (Exception e) {
+
+        /*
+         * Needed for the original Flashcards
+         * image chooser.
+         */
+        System.setProperty(
+                "java.awt.headless",
+                "false"
+        );
+
+        try {
+
+            UIManager.setLookAndFeel(
+                    UIManager.getSystemLookAndFeelClassName()
+            );
+
+        } catch (Exception e) {
+
             throw new RuntimeException(e);
         }
 
-        LOGGER.info("Initializing flashcards client");
-        ClientPlayConnectionEvents.JOIN.register((_, _, _) -> QuestionScheduler.schedule());
-        ClientPlayConnectionEvents.DISCONNECT.register((_,_) -> QuestionScheduler.stop());
+        LOGGER.info(
+                "Initializing flashcards client"
+        );
 
-        ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
-            if (minecraft.player == null || minecraft.level == null) return;
-            if (minecraft.player.hurtTime != 0) QuestionScheduler.playerLastHurtTime = minecraft.level.getGameTime();
-        });
-        ClientLifecycleEvents.CLIENT_STARTED.register(_ -> {
-            FileManager.init();
-            ProgressManager.init();
-            StudyQuestionRepository.init();
-            QuestionScheduler.reload();
-        });
-        ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> QuestionScheduler.close());
+        /*
+         * =========================================================
+         * ORIGINAL FLASHCARDS CONNECTION EVENTS
+         * =========================================================
+         */
 
-        KeyMapping.Category keyBindingCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
+        ClientPlayConnectionEvents.JOIN.register(
+                (_, _, _) ->
+                        QuestionScheduler.schedule()
+        );
 
-        KeyMapping keyBindingConfigMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "Flashcards Config Menu",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_H,
-                keyBindingCategory
-        ));
+        ClientPlayConnectionEvents.DISCONNECT.register(
+                (_, _) ->
+                        QuestionScheduler.stop()
+        );
 
-        KeyMapping keyBindingPromptQuestion = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "Prompt a question",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_G,
-                keyBindingCategory
-        ));
+        ClientTickEvents.END_CLIENT_TICK.register(
+                minecraft -> {
+
+                    if (minecraft.player == null
+                            || minecraft.level == null) {
+
+                        return;
+                    }
+
+                    if (minecraft.player.hurtTime != 0) {
+
+                        QuestionScheduler.playerLastHurtTime =
+                                minecraft.level.getGameTime();
+                    }
+                }
+        );
+
+        /*
+         * =========================================================
+         * STARTUP
+         * =========================================================
+         */
+
+        ClientLifecycleEvents.CLIENT_STARTED.register(
+                _ -> {
+
+                    /*
+                     * Order matters.
+                     *
+                     * FileManager imports Anki first.
+                     * StudyCraft then reads those imported files.
+                     */
+                    FileManager.init();
+
+                    ProgressManager.init();
+
+                    StudyQuestionRepository.init();
+
+                    QuestionScheduler.reload();
+
+                    LOGGER.info(
+                            "StudyCraft initialized successfully."
+                    );
+                }
+        );
+
+        ClientLifecycleEvents.CLIENT_STOPPING.register(
+                _ -> QuestionScheduler.close()
+        );
+
+        /*
+         * =========================================================
+         * KEYBIND CATEGORY
+         * =========================================================
+         */
+
+        KeyMapping.Category keyBindingCategory =
+                KeyMapping.Category.register(
+                        Identifier.fromNamespaceAndPath(
+                                MOD_ID,
+                                "main"
+                        )
+                );
+
+        /*
+         * =========================================================
+         * H = ORIGINAL CONFIG
+         * =========================================================
+         */
+
+        KeyMapping keyBindingConfigMenu =
+                KeyMappingHelper.registerKeyMapping(
+                        new KeyMapping(
+                                "Flashcards Config Menu",
+                                InputConstants.Type.KEYSYM,
+                                GLFW.GLFW_KEY_H,
+                                keyBindingCategory
+                        )
+                );
+
+        /*
+         * =========================================================
+         * G = ORIGINAL FLASHCARDS QUESTION
+         * =========================================================
+         */
+
+        KeyMapping keyBindingPromptQuestion =
+                KeyMappingHelper.registerKeyMapping(
+                        new KeyMapping(
+                                "Prompt a question",
+                                InputConstants.Type.KEYSYM,
+                                GLFW.GLFW_KEY_G,
+                                keyBindingCategory
+                        )
+                );
+
+        /*
+         * =========================================================
+         * J = STUDYCRAFT QUESTION NOW
+         *
+         * THIS WAS MISSING FROM YOUR FILE.
+         * =========================================================
+         */
 
         KeyMapping keyBindingStudyQuestion =
                 KeyMappingHelper.registerKeyMapping(
@@ -81,35 +189,119 @@ public class Flashcards implements ClientModInitializer {
                         )
                 );
 
-        ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
-            if (keyBindingConfigMenu.consumeClick()) {
-                //noinspection StatementWithEmptyBody
-                while (keyBindingConfigMenu.consumeClick()); //consume additional presses
+        /*
+         * =========================================================
+         * K = TOGGLE AUTOMATIC STUDYCRAFT QUESTIONS
+         * =========================================================
+         */
 
-                if (minecraft.gui.screen() instanceof ConfigurationScreen) {
-                    minecraft.gui.screen().onClose();
-                }
-                else if (minecraft.gui.screen() == null) {
-                    ConfigurationScreen screen = new ConfigurationScreen(null);
-                    minecraft.gui.setScreen(screen);
-                }
-            }
-        });
+        KeyMapping keyBindingToggleStudyCraft =
+                KeyMappingHelper.registerKeyMapping(
+                        new KeyMapping(
+                                "Toggle automatic StudyCraft questions",
+                                InputConstants.Type.KEYSYM,
+                                GLFW.GLFW_KEY_K,
+                                keyBindingCategory
+                        )
+                );
 
-        ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
-            if (keyBindingPromptQuestion.consumeClick()) {
-                //noinspection StatementWithEmptyBody
-                while (keyBindingPromptQuestion.consumeClick()); //consume additional presses
+        /*
+         * =========================================================
+         * H HANDLER
+         * =========================================================
+         */
 
-                if (minecraft.player == null || minecraft.level == null) return;
-                if (FileManager.getConfig().intervalToggle()) {
-                    MutableComponent text = Component.literal("The interval toggle must be off for you to prompt a question on-demand.").withColor(CommonColors.SOFT_RED);
-                    minecraft.player.sendOverlayMessage(text);
-                    return;
+        ClientTickEvents.END_CLIENT_TICK.register(
+                minecraft -> {
+
+                    if (!keyBindingConfigMenu.consumeClick()) {
+                        return;
+                    }
+
+                    /*
+                     * Consume additional queued presses.
+                     */
+                    while (keyBindingConfigMenu.consumeClick()) {
+                        // Do nothing.
+                    }
+
+                    if (minecraft.gui.screen()
+                            instanceof ConfigurationScreen) {
+
+                        minecraft.gui.screen().onClose();
+
+                    } else if (
+                            minecraft.gui.screen() == null
+                    ) {
+
+                        ConfigurationScreen screen =
+                                new ConfigurationScreen(
+                                        null
+                                );
+
+                        minecraft.gui.setScreen(
+                                screen
+                        );
+                    }
                 }
-                QuestionScheduler.promptQuestion();
-            }
-        });
+        );
+
+        /*
+         * =========================================================
+         * G HANDLER
+         *
+         * Original Flashcards system.
+         * =========================================================
+         */
+
+        ClientTickEvents.END_CLIENT_TICK.register(
+                minecraft -> {
+
+                    if (!keyBindingPromptQuestion.consumeClick()) {
+                        return;
+                    }
+
+                    while (keyBindingPromptQuestion.consumeClick()) {
+                        // Consume additional presses.
+                    }
+
+                    if (minecraft.player == null
+                            || minecraft.level == null) {
+
+                        return;
+                    }
+
+                    if (FileManager
+                            .getConfig()
+                            .intervalToggle()) {
+
+                        MutableComponent text =
+                                Component.literal(
+                                                "The interval toggle must be off for you to prompt a question on-demand."
+                                        )
+                                        .withColor(
+                                                CommonColors.SOFT_RED
+                                        );
+
+                        minecraft.player
+                                .sendOverlayMessage(
+                                        text
+                                );
+
+                        return;
+                    }
+
+                    QuestionScheduler.promptQuestion();
+                }
+        );
+
+        /*
+         * =========================================================
+         * J HANDLER
+         *
+         * Smart StudyCraft question.
+         * =========================================================
+         */
 
         ClientTickEvents.END_CLIENT_TICK.register(
                 minecraft -> {
@@ -124,42 +316,91 @@ public class Flashcards implements ClientModInitializer {
 
                     if (minecraft.player == null
                             || minecraft.level == null) {
+
                         return;
                     }
 
+                    /*
+                     * Don't open a StudyCraft question over
+                     * another screen/inventory/menu.
+                     */
                     if (minecraft.gui.screen() != null) {
                         return;
                     }
 
-                    List<StudyQuestion> questions =
-                            StudyQuestionRepository.getAll();
+                    StudyQuestion question =
+                            StudyScheduler.nextQuestion();
 
-                    if (questions.isEmpty()) {
+                    if (question == null) {
 
-                        minecraft.player.sendOverlayMessage(
-                                Component.literal(
-                                        "No StudyCraft questions are loaded."
-                                ).withColor(
-                                        CommonColors.SOFT_RED
-                                )
-                        );
+                        minecraft.player
+                                .sendOverlayMessage(
+                                        Component.literal(
+                                                "No StudyCraft questions loaded."
+                                        )
+                                );
 
                         return;
                     }
 
-                    StudyQuestion question =
-                            questions.get(
-                                    ThreadLocalRandom.current()
-                                            .nextInt(
-                                                    questions.size()
-                                            )
-                            );
-
                     minecraft.gui.setScreen(
-                            new StudyQuestionScreen(question)
+                            new StudyQuestionScreen(
+                                    question
+                            )
                     );
+
+                    /*
+                     * Reset the automatic timer because
+                     * the player has just studied manually.
+                     */
+                    StudyAutoQuizManager.resetTimer();
                 }
         );
-    }
 
+        /*
+         * =========================================================
+         * K HANDLER
+         *
+         * Toggle automatic StudyCraft questions.
+         * =========================================================
+         */
+
+        ClientTickEvents.END_CLIENT_TICK.register(
+                minecraft -> {
+
+                    if (!keyBindingToggleStudyCraft.consumeClick()) {
+                        return;
+                    }
+
+                    while (keyBindingToggleStudyCraft.consumeClick()) {
+                        // Consume additional presses.
+                    }
+
+                    boolean enabled =
+                            StudyAutoQuizManager.toggle();
+
+                    if (minecraft.player != null) {
+
+                        minecraft.player
+                                .sendOverlayMessage(
+                                        Component.literal(
+                                                enabled
+                                                        ? "StudyCraft automatic questions: ON"
+                                                        : "StudyCraft automatic questions: OFF"
+                                        )
+                                );
+                    }
+                }
+        );
+
+        /*
+         * =========================================================
+         * AUTOMATIC STUDYCRAFT TIMER
+         * =========================================================
+         */
+
+        ClientTickEvents.END_CLIENT_TICK.register(
+                StudyAutoQuizManager::tick
+        );
+    }
 }
