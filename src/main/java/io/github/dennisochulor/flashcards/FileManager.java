@@ -636,13 +636,25 @@ public final class FileManager {
                     return;
                 }
 
+                String originalFilename =
+                        f.getName();
+
+                int extensionIndex =
+                        originalFilename.lastIndexOf('.');
+
                 String filename =
-                        "anki-"
-                                + ThreadLocalRandom.current()
-                                .nextInt(
-                                        0,
-                                        99999
-                                );
+                        extensionIndex > 0
+                                ? originalFilename.substring(
+                                0,
+                                extensionIndex
+                        )
+                                : originalFilename;
+
+                filename =
+                        filename.replaceAll(
+                                "[^A-Za-z0-9_-]",
+                                "_"
+                        );
 
                 File outputFile =
                         new File(

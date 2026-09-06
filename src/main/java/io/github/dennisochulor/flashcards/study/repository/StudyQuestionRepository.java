@@ -61,11 +61,16 @@ public final class StudyQuestionRepository {
     }
 
     public static void reload() {
+
         ensureInitialised();
 
         questionsById.clear();
 
-        try (Stream<Path> files = Files.list(questionsDirectory)) {
+        /*
+         * Native StudyCraft JSON.
+         */
+        try (Stream<Path> files =
+                     Files.list(questionsDirectory)) {
 
             List<Path> questionFiles =
                     files.filter(Files::isRegularFile)
@@ -83,10 +88,36 @@ public final class StudyQuestionRepository {
             }
 
         } catch (IOException e) {
+
             throw new UncheckedIOException(
                     "Failed to load StudyCraft questions.",
                     e
             );
+        }
+
+        /*
+         * Imported Anki Irish vocabulary.
+         */
+        List<StudyQuestion> bridgedQuestions =
+                LegacyAnkiQuestionBridge
+                        .loadIrishVocabularyQuestions();
+
+        for (StudyQuestion question :
+                bridgedQuestions) {
+
+            StudyQuestion previous =
+                    questionsById.putIfAbsent(
+                            question.id(),
+                            question
+                    );
+
+            if (previous != null) {
+
+                throw new IllegalArgumentException(
+                        "Duplicate StudyCraft question ID: "
+                                + question.id()
+                );
+            }
         }
     }
 
